@@ -8,14 +8,17 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 object Palette {
-    const val CLAUDE = 0xFFD97757.toInt()
-    const val AMBER = 0xFFF2B84B.toInt()
-    const val RED = 0xFFFF6B5B.toInt()
-    const val GREEN = 0xFF86C98A.toInt()
-    const val GREY = 0xFF8A8780.toInt()
-    const val TRACK = 0xFF2E2C28.toInt()
-    const val TEXT = 0xFFF2EFE8.toInt()
-    const val DIM = 0xFFA9A49A.toInt()
+    // One UI Watch: black background, dark grey cards, bold white numbers, one warm accent
+    const val CLAUDE = 0xFFFF8A5B.toInt()
+    const val AMBER = 0xFFFFCC00.toInt()
+    const val RED = 0xFFFF453A.toInt()
+    const val GREEN = 0xFF4CD964.toInt()
+    const val GREY = 0xFF8E8E93.toInt()
+    const val CARD = 0xFF1F1F1F.toInt()
+    const val TRACK = 0xFF3A3A3A.toInt()
+    const val TEXT = 0xFFFFFFFF.toInt()
+    const val DIM = 0xFF9A9A9A.toInt()
+    const val FAINT = 0xFF6A6A6A.toInt()
 
     fun forLimit(l: Limit?): Int = when {
         l == null -> GREY
@@ -66,6 +69,14 @@ fun agoLabel(ms: Long?): String {
 data class Line(val text: String, val color: Int)
 
 /** Top line on the first screen: what Claude Desktop is doing. */
+/** Short Desktop state for the small card: text + dot colour; null when the PC agent isn't there. */
+fun desktopShort(s: Status): Line? = when {
+    !s.pcOnline || s.desktopRunning == null -> null
+    s.desktopRunning == true && s.desktopBusy == true -> Line("работает", Palette.CLAUDE)
+    s.desktopRunning == true -> Line("вкл.", Palette.GREEN)
+    else -> Line("выкл.", Palette.GREY)
+}
+
 fun desktopLine(s: Status): Line = when {
     s.pcOnline && s.desktopRunning == true && s.desktopBusy == true -> Line("Desktop: работает", Palette.CLAUDE)
     s.pcOnline && s.desktopRunning == true -> Line("Desktop: открыт", Palette.GREEN)

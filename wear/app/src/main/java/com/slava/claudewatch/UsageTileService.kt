@@ -3,13 +3,10 @@ package com.slava.claudewatch
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.wear.protolayout.ActionBuilders
 import androidx.wear.protolayout.ColorBuilders.argb
-import androidx.wear.protolayout.DimensionBuilders.degrees
 import androidx.wear.protolayout.DimensionBuilders.dp
 import androidx.wear.protolayout.DimensionBuilders.expand
 import androidx.wear.protolayout.DimensionBuilders.sp
 import androidx.wear.protolayout.LayoutElementBuilders
-import androidx.wear.protolayout.LayoutElementBuilders.Arc
-import androidx.wear.protolayout.LayoutElementBuilders.ArcLine
 import androidx.wear.protolayout.LayoutElementBuilders.Box
 import androidx.wear.protolayout.LayoutElementBuilders.Column
 import androidx.wear.protolayout.LayoutElementBuilders.FontStyle
@@ -69,52 +66,85 @@ class UsageTileService : TileService() {
         .build()
 
     private fun layout(paired: Boolean, s: Status?): LayoutElement {
-        val column = Column.Builder().setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
+        val col = Column.Builder().setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
+        col.addContent(text("Claude", 11f, Palette.DIM))
+        col.addContent(space(5f))
         when {
-            !paired -> {
-                column.addContent(text("Claude", 16f, Palette.CLAUDE, bold = true))
-                column.addContent(text("Открой приложение,\nчтобы привязать", 12f, Palette.DIM))
-            }
-            s == null -> column.addContent(text("Нет данных", 14f, Palette.DIM))
-            s.loginNeeded -> column.addContent(text("Войди в Claude\nна /admin", 13f, Palette.AMBER))
+            !paired -> col.addContent(text("Открой приложение,\nчтобы привязать", 12f, Palette.TEXT))
+            s == null -> col.addContent(text("Нет данных", 13f, Palette.DIM))
+            s.loginNeeded -> col.addContent(text("Войди в Claude\nна /admin", 12f, Palette.AMBER))
             else -> {
-                val top = desktopLine(s)
-                column.addContent(text(top.text, 11f, top.color))
-                column.addContent(space(2f))
-                column.addContent(text(s.session?.let { "${it.percent}%" } ?: "—", 34f, Palette.TEXT, bold = true))
-                column.addContent(text("5 ч · " + untilLabel(s.session?.resetsAt), 11f, Palette.DIM))
-                column.addContent(space(4f))
-                column.addContent(text("неделя ${s.week?.percent ?: "—"}%", 13f, Palette.forLimit(s.week), bold = true))
-                val code = if (s.pcOnline) "Code: " + codeStateLine(s.codeState).text.lowercase() else null
-                if (code != null) {
-                    column.addContent(space(2f))
-                    column.addContent(text(code, 11f, codeStateLine(s.codeState).color))
-                }
+                // big card: 5-hour window
+                val pct = s.session?.percent ?: 0
+                val big = Column.Builder()
+                    .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
+                    .addContent(text("5 часов · " + untilLabel(s.session?.resetsAt), 9.5f, Palette.DIM))
+                    .addContent(text(s.session?.let { "${it.percent}%" } ?: "—", 26f, Palette.TEXT, bold = true))
+                    .addContent(space(3f))
+                    .addContent(bar(BAR_W, pct, Palette.forLimit(s.session)))
+                    .build()
+                col.addContent(card(big, CARD_W, 18f, 9f))
+                col.addContent(space(4f))
+                val code = if (s.pcOnline) codeStateLine(s.codeState)
+                           else if (s.active) Line("активен", Palette.CLAUDE) else Line("—", Palette.GREY)
+                val row = LayoutElementBuilders.Row.Builder()
+                    .addContent(card(small("Неделя", "${s.week?.percent ?: "—"}%", Palette.TEXT), SMALL_W, 16f, 7f))
+                    .addContent(Spacer.Builder().setWidth(dp(4f)).build())
+                    .addContent(card(small(if (s.pcOnline) "Code" else "Claude", code.text.lowercase(), code.color), SMALL_W, 16f, 7f))
+                    .build()
+                col.addContent(row)
             }
         }
-
-        val box = Box.Builder()
+        return Box.Builder()
             .setWidth(expand()).setHeight(expand())
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
             .setModifiers(openApp())
-        if (paired && s != null && !s.loginNeeded) {
-            box.addContent(ring(1f, Palette.TRACK))
-            val p = ((s.session?.percent ?: 0) / 100f).coerceIn(0f, 1f)
-            if (p > 0f) box.addContent(ring(p, Palette.forLimit(s.session)))
-        }
-        box.addContent(column.build())
-        return box.build()
+            .addContent(col.build())
+            .build()
     }
 
-    private fun ring(fraction: Float, color: Int): LayoutElement = Arc.Builder()
-        .setAnchorAngle(degrees(0f))
-        .setAnchorType(LayoutElementBuilders.ARC_ANCHOR_START)
-        .addContent(
-            ArcLine.Builder()
-                .setLength(degrees(360f * fraction))
-                .setThickness(dp(6f))
+    private fun small(title: String, value: String, color: Int): LayoutElement = Column.Builder()
+        .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
+        .addContent(text(title, 9f, Palette.DIM))
+        .addContent(text(value, 14f, color, bold = true))
+        .build()
+
+    /** One UI card: dark grey rounded rectangle. */
+    private fun card(content: LayoutElement, width: Float, radius: Float, pad: Float): LayoutElement = Box.Builder()
+        .setWidth(dp(width))
+        .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
+        .setModifiers(
+            ModifiersBuilders.Modifiers.Builder()
+                .setBackground(
+                    ModifiersBuilders.Background.Builder()
+                        .setColor(argb(Palette.CARD))
+                        .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(radius)).build())
+                        .build()
+                )
+                .setPadding(ModifiersBuilders.Padding.Builder().setAll(dp(pad)).build())
+                .build()
+        )
+        .addContent(content)
+        .build()
+
+    private fun bar(width: Float, percent: Int, color: Int): LayoutElement {
+        val fill = width * percent.coerceIn(0, 100) / 100f
+        val track = Box.Builder()
+            .setWidth(dp(width)).setHeight(dp(4f))
+            .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
+            .setModifiers(rounded(Palette.TRACK))
+        if (fill >= 4f) track.addContent(
+            Box.Builder().setWidth(dp(fill)).setHeight(dp(4f)).setModifiers(rounded(color)).build()
+        )
+        return track.build()
+    }
+
+    private fun rounded(color: Int) = ModifiersBuilders.Modifiers.Builder()
+        .setBackground(
+            ModifiersBuilders.Background.Builder()
                 .setColor(argb(color))
+                .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(2f)).build())
                 .build()
         )
         .build()
@@ -154,5 +184,8 @@ class UsageTileService : TileService() {
 
     private companion object {
         const val RES_VERSION = "1"
+        const val CARD_W = 148f
+        const val BAR_W = CARD_W - 18f
+        const val SMALL_W = 72f
     }
 }
