@@ -1,0 +1,46 @@
+name: Build watch APK
+
+on:
+  push:
+    branches: [main]
+    paths: ["wear/**", ".github/workflows/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build
+        env:
+          KEYSTORE_FILE: ${{ github.workspace }}/wear/signing/claude-watch.jks
+          KEYSTORE_PASSWORD: claudewatch
+          KEY_ALIAS: claudewatch
+        run: gradle -p wear :app:assembleRelease --stacktrace
+      - name: Rename
+        run: cp wear/app/build/outputs/apk/release/app-release.apk claude-watch.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claude-watch-apk
+          path: claude-watch.apk
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Часы — сборка ${{ github.run_number }}
+          make_latest: true
+          files: claude-watch.apk
+          body: |
+            Установщик для часов: **claude-watch.apk** ниже.
+            Постоянная ссылка на последнюю сборку:
+            https://github.com/${{ github.repository }}/releases/latest/download/claude-watch.apk
